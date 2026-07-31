@@ -46,18 +46,14 @@ def create_task(new_task: TaskCreate):
 
 @app.put("/tasks/{task_id}", summary="Update a task's title/done status")
 def update_task(task_id: int, updated: TaskUpdate):
-    # 1. strip and validate updated.title, same as create_task
     title = updated.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="title must not be empty")
-    # 2. loop through tasks
     for task in tasks:
         if task["id"] == task_id:
-            # 3. if you find a match, update its "title" and "done", then return it
             task["title"] = title
             task["done"] = updated.done
             return task
-    # 4. if the loop finishes with no match, raise 404
     raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
 @app.delete("/tasks/{task_id}", status_code=204, summary="Delete a specific task")
