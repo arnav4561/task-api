@@ -10,31 +10,30 @@ tasks = [
 next_id = 4
 class TaskCreate(BaseModel):
     title: str
-
 class TaskUpdate(BaseModel):
     title: str
     done: bool = False
 
-@app.get("/")
+@app.get("/", summary="API info")
 def read_root():
     return {"name": "Task API", "version": "1.0", "endpoints": ["/tasks"]}
 
-@app.get("/health")
+@app.get("/health", summary="Health check")
 def health_check():
     return {"status": "ok"}
 
-@app.get("/tasks")
+@app.get("/tasks", summary="List all tasks")
 def get_tasks():
     return tasks
 
-@app.get("/tasks/{task_id}")
+@app.get("/tasks/{task_id}", summary="Get a specific task by id")
 def get_task(task_id: int):
     for task in tasks:
         if task["id"] == task_id:
             return task
     raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
-@app.post("/tasks", status_code=201)
+@app.post("/tasks", status_code=201, summary="Create a new task")
 def create_task(new_task: TaskCreate):
     global next_id
     title = new_task.title.strip()
@@ -45,7 +44,7 @@ def create_task(new_task: TaskCreate):
     next_id += 1
     return task
 
-@app.put("/tasks/{task_id}")
+@app.put("/tasks/{task_id}", summary="Update a task's title/done status")
 def update_task(task_id: int, updated: TaskUpdate):
     # 1. strip and validate updated.title, same as create_task
     title = updated.title.strip()
@@ -61,7 +60,7 @@ def update_task(task_id: int, updated: TaskUpdate):
     # 4. if the loop finishes with no match, raise 404
     raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
-@app.delete("/tasks/{task_id}", status_code=204)
+@app.delete("/tasks/{task_id}", status_code=204, summary="Delete a specific task")
 def delete_task(task_id: int):
     for i, task in enumerate(tasks):
         if task["id"] == task_id:
