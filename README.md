@@ -69,3 +69,56 @@ running is gone, because the data only ever lived in a Python list in
 memory, not on disk. Restarting the process wipes the variable along with
 it. This is exactly why a real database matters — it's the thing that
 survives a restart.
+
+## AI vs me
+
+### My prompt
+> make an api, read, create, update, delete as options, use python, framework
+> fast api, swagger docs, status codes- 200, 404 not found, 204 no content,
+> 201 created, storage in-memory, endpoints: root, health, tasks and then
+> get, create, update, delete, tasks should have, id, title, done categories
+
+### What did the AI do better?
+Not much, functionally — the CRUD logic itself came out nearly identical to
+mine (same loop-and-check pattern for find/update/delete, same in-memory
+list). The one place it was arguably cleaner: it used a single `Task`
+Pydantic model for both create and update, instead of my two separate
+`TaskCreate`/`TaskUpdate` models. That's less code, though I'd argue mine is
+slightly more correct — a `POST` body shouldn't really need a `done` field
+(a task can't be born already finished), which my split models prevent and
+the AI's single model doesn't.
+
+### What did it get wrong or quietly ignore from my prompt?
+The AI version **accepts an empty title and creates the task anyway**,
+returning `201` with `{"title": ""}` in the response. My own version
+explicitly checks for this and returns `400`. My prompt never actually
+asked for input validation — I listed status codes but never said "reject
+bad input" — so this isn't the AI being wrong exactly, it's the AI building
+literally what I asked for and nothing more. But it's a real bug either
+way: a production task list with silent empty-title entries is bad
+behavior, and the AI didn't push back or flag the gap — it just built it.
+
+### What did my prompt forget to specify — and what did the AI silently decide for you?
+- **Validation rules** — the big one. I never mentioned rejecting empty or
+  missing titles, so none exists in the AI's version.
+- **Error message wording** — the AI used `"Task not found"` for every 404;
+  mine says `"Task {id} not found"`, which is more useful for debugging.
+- **Response shape for `/` and `/health`** — I said "root" and "health" as
+  endpoints but never specified their JSON shape, so the AI picked its own
+  (`{"message": "Task API is running"}` vs my `{"name": "Task API",
+  "version": "1.0", "endpoints": [...]}`).
+- **Whether `done` should be settable on create** — I never said a new task
+  starts as not-done; the AI made `done` an optional field on the same
+  model used for POST, so a client could technically create a task that's
+  already marked done.
+
+### One rematch
+Updated prompt: same as above, plus — *"POST and PUT must return 400 if
+title is missing or empty (after trimming whitespace); a new task must
+always start with done=false, so use separate models for create vs
+update."*
+What changed: the regenerated version added an explicit `if not title.strip(): raise HTTPException(400, ...)` check in both `create_task` and
+`update_task`, and split into two models exactly as instructed — bringing
+it in line with my Stage 3/4 behavior. The lesson: the AI's output was
+never actually wrong given what it was told — every gap traces back to
+something I left unspecified in the prompt.
