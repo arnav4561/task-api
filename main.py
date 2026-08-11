@@ -1,16 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from database import init_db
+from database import init_db, get_connection
 
 init_db()
 
 app = FastAPI()
-tasks = [
-    {"id": 1, "title": "Buy milk", "done": False},
-    {"id": 2, "title": "Go to the gym", "done": True},
-    {"id": 3, "title": "Read a book", "done": False},
-]
-next_id = 4
+
 class TaskCreate(BaseModel):
     title: str
 class TaskUpdate(BaseModel):
@@ -27,14 +22,19 @@ def health_check():
 
 @app.get("/tasks", summary="List all tasks")
 def get_tasks():
-    return tasks
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM tasks").fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 @app.get("/tasks/{task_id}", summary="Get a specific task by id")
 def get_task(task_id: int):
-    for task in tasks:
-        if task["id"] == task_id:
-            return task
-    raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return dict(row)
 
 @app.post("/tasks", status_code=201, summary="Create a new task")
 def create_task(new_task: TaskCreate):
