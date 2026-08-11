@@ -122,3 +122,62 @@ What changed: the regenerated version added an explicit `if not title.strip(): r
 it in line with my Stage 3/4 behavior. The lesson: the AI's output was
 never actually wrong given what it was told — every gap traces back to
 something I left unspecified in the prompt.
+
+## Database (SQLite)
+
+### Why SQLite
+This project uses SQLite instead of a larger database like PostgreSQL because
+it needs no separate server process — the whole database lives in a single
+file, and Python's built-in `sqlite3` module talks to it directly, no extra
+installs required. For a small project like this, that's the right amount
+of infrastructure: enough to get real persistence, without the overhead of
+running and configuring a separate database server.
+
+### Where the database lives
+The database is a single file, `tasks.db`, created automatically in the
+project root the first time the app runs. It's excluded from git via
+`.gitignore` — it's runtime data, not source code, so a fresh clone of this
+repo won't include it. Instead, `database.py`'s `init_db()` function creates
+the file and the `tasks` table (and seeds 3 example tasks) automatically on
+first startup, so a stranger cloning this repo gets a working database with
+zero manual setup.
+
+### How to run it
+Same as Assignment 1 — no new dependencies, since `sqlite3` ships with
+Python.
+
+```powershell
+python -m venv venv
+venv\Scripts\activate
+pip install fastapi "uvicorn[standard]"
+uvicorn main:app --reload --port 8000
+```
+
+`tasks.db` will appear automatically on first run.
+
+### Viewing the database directly
+[DB Browser for SQLite](https://sqlitebrowser.org/) was used to inspect and
+manually query the database outside the API.
+
+![DB Browser screenshot](db-browser-screenshot.png)
+
+### Example SQL query
+```sql
+SELECT * FROM tasks WHERE done = 1;
+```
+Running this in DB Browser's Execute SQL tab, then hitting `GET /tasks` in
+the running API immediately afterward, shows the exact same data —
+confirming the API and the database viewer are just two different windows
+onto the same file. Marking a task done directly through SQL, with zero
+code changes, was reflected instantly through the API.
+
+### What changed vs. Assignment 1
+The API itself — every endpoint, path, request/response shape, and status
+code — is unchanged. The only difference is what happens *inside* each
+endpoint: instead of reading/writing a Python list that lived in memory,
+each endpoint now runs a SQL query against `tasks.db`. The practical result:
+data now survives a server restart, which it never did before.
+
+One visible side effect worth noting: SQLite stores booleans as integers,
+so `done` now comes back as `0`/`1` in the JSON response instead of
+`true`/`false` as it did in Assignment 1.
