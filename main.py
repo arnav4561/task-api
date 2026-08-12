@@ -37,46 +37,21 @@ def create_task(new_task: TaskCreate):
     title = new_task.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="title must not be empty")
-
-    conn = get_connection()
-    cursor = conn.execute(
-        "INSERT INTO tasks (title, done) VALUES (?, ?)",
-        (title, False)
-    )
-    new_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-
-    return {"id": new_id, "title": title, "done": False}
+    return repo.create(title)
 
 @app.put("/tasks/{task_id}", summary="Update a task's title/done status")
 def update_task(task_id: int, updated: TaskUpdate):
     title = updated.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="title must not be empty")
-
-    conn = get_connection()
-    cursor = conn.execute(
-        "UPDATE tasks SET title = ?, done = ? WHERE id = ?",
-        (title, updated.done, task_id)
-    )
-    conn.commit()
-
-    if cursor.rowcount == 0:
-        conn.close()
+    task = repo.update(task_id, title, updated.done)
+    if not task:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-
-    row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
-    conn.close()
-    return dict(row)
+    return task
 
 
 @app.delete("/tasks/{task_id}", status_code=204, summary="Delete a specific task")
 def delete_task(task_id: int):
-    conn = get_connection()
-    cursor = conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
-    conn.commit()
-    conn.close()
-
-    if cursor.rowcount == 0:
+    deleted = repo.delete(task_id)
+    if not deleted:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
