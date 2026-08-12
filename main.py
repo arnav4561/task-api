@@ -1,10 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from database import init_db, get_connection
-
-init_db()
+from repository import TaskRepository
 
 app = FastAPI()
+
+repo = TaskRepository()
 
 class TaskCreate(BaseModel):
     title: str
@@ -22,19 +22,15 @@ def health_check():
 
 @app.get("/tasks", summary="List all tasks")
 def get_tasks():
-    conn = get_connection()
-    rows = conn.execute("SELECT * FROM tasks").fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    return repo.get_all()
+
 
 @app.get("/tasks/{task_id}", summary="Get a specific task by id")
 def get_task(task_id: int):
-    conn = get_connection()
-    row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
-    conn.close()
-    if not row:
+    task = repo.get_by_id(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return dict(row)
+    return task
 
 @app.post("/tasks", status_code=201, summary="Create a new task")
 def create_task(new_task: TaskCreate):
