@@ -181,3 +181,81 @@ data now survives a server restart, which it never did before.
 One visible side effect worth noting: SQLite stores booleans as integers,
 so `done` now comes back as `0`/`1` in the JSON response instead of
 `true`/`false` as it did in Assignment 1.
+
+## Containerized stack (Postgres + Docker Compose)
+
+### Overview
+The app now runs alongside a real Postgres database, both inside Docker,
+started together with a single command:
+
+```powershell
+docker compose up
+```
+
+This replaces the earlier setup (a local SQLite file, or a manually-run
+Postgres container) with a fully reproducible stack — anyone cloning this
+repo can run one command and get a working app + database, with no manual
+setup beyond creating a `.env` file.
+
+### Postgres in Docker, with a volume
+Postgres runs as the `db` service in `docker-compose.yml`, using the
+official `postgres:16` image. Data is stored in a named Docker volume,
+`pgdata`, mapped to `/var/lib/postgresql/data` inside the container — this
+is what allows the database to survive containers being stopped, removed,
+and recreated (`docker compose down` followed by `docker compose up`).
+
+The `tasks` table is created automatically on first startup via `init.sql`,
+mounted into Postgres's `/docker-entrypoint-initdb.d/` directory — Postgres
+runs any SQL file placed there the first time it starts with an empty
+database.
+
+### Connection string via `.env`
+The database connection string lives in `.env`:
+
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/taskdb
+
+`.env` is gitignored — it's never committed. A `.env.example` with the same
+shape is committed instead, so anyone cloning the repo knows what variable
+to set. Inside Docker Compose specifically, the `app` service overrides this
+with `db` as the hostname instead of `localhost`, since containers reach
+each other by service name, not `localhost`, once both are running inside
+Compose's network.
+
+### Repository swap — service and routes unchanged
+This is the architectural point of the whole assignment, and it's true here:
+`main.py`'s route functions (`get_tasks`, `get_task`, `create_task`,
+`update_task`, `delete_task`) are functionally identical to the SQLite
+version from the previous assignment. Each one still does the same three
+things: validate input if needed, call the storage layer, translate the
+result into an HTTP response. The only thing that changed is what's inside
+`repository.py` — SQLite's `sqlite3` + `?` placeholders were replaced with
+`psycopg2` + `%s` placeholders, talking to Postgres instead. No route
+signature, path, or status code changed.
+
+### Proving persistence
+To prove data survives a full stack restart (not just a database restart,
+but the app container too):
+
+1. Created a task via `POST /tasks` — confirmed with `GET /tasks`.
+2. Ran `docker compose down` — this stops **and removes** both containers
+   entirely (a real teardown, not a pause).
+3. Ran `docker compose up` again — fresh containers were created from
+   scratch.
+4. Ran `GET /tasks` again — the task created in step 1 was still there.
+
+The Postgres startup log confirmed this directly, logging
+`PostgreSQL Database directory appears to contain a database; Skipping
+initialization` — meaning it found existing data in the `pgdata` volume
+rather than starting from empty, even though the containers themselves
+had been completely removed and recreated.
+
+### How to run it
+```powershell
+# 1. copy the example env file and adjust if needed
+cp .env.example .env
+
+# 2. start the whole stack
+docker compose up
+```
+The app will be available at `http://localhost:8000`, Postgres at
+`localhost:5432`.
